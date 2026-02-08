@@ -21,10 +21,10 @@ try
     builder.Services.AddOpenApi();
     builder.Services.AddHttpClient();
 
-    // Register application services
-    builder.Services.AddSingleton<ISessionManager, SessionManager>();
+    // Register application services (SQLite-backed for persistence)
+    builder.Services.AddSingleton<ISessionManager, SqliteSessionManager>();
     builder.Services.AddSingleton<ICopilotCliService, CopilotCliService>();
-    builder.Services.AddSingleton<INotificationService, NotificationService>();
+    builder.Services.AddSingleton<INotificationService, SqliteNotificationService>();
     builder.Services.AddSingleton<IGitHubService, GitHubService>();
 
     // Configure CORS for SignalR

@@ -10,8 +10,10 @@ services:
       - ASPNETCORE_URLS=http://+:5002
       - VscodeServerUrl=http://vscode-server:5000
       - VscodeServerAuthToken=remote-vibe-internal-token
+      - Database__Path=/app/data/remotevibe.db
     volumes:
       - ./backend/logs:/app/logs
+      - backend-data:/app/data
     networks:
       - remotevibe-network
 
@@ -27,9 +29,11 @@ services:
       - REMOTE_VIBE_AUTO_START=true
       - REMOTE_VIBE_AUTH_TOKEN=remote-vibe-internal-token
       - REMOTE_VIBE_PORT=5000
+      - REMOTE_VIBE_DB_PATH=/home/coder/data/vscode-server.db
     volumes:
       - ./workspace:/home/coder/workspace
       - vscode-data:/home/coder/.local/share/code-server
+      - vscode-server-data:/home/coder/data
     networks:
       - remotevibe-network
     depends_on:
@@ -41,3 +45,5 @@ networks:
 
 volumes:
   vscode-data:
+  backend-data:
+  vscode-server-data:
