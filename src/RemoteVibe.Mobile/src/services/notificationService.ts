@@ -46,7 +46,8 @@ export async function registerForPushNotifications(): Promise<string | null> {
     try {
       await apiClient.registerDevice(token, platform);
     } catch {
-      // Backend registration failed but we still have the token
+      // Allow local notifications even if backend registration fails;
+      // the user can still receive in-app notifications via SignalR
     }
 
     // Configure Android notification channel

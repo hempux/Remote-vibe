@@ -31,7 +31,9 @@ public class GitHubService : IGitHubService
     {
         _token = token;
         _cachedStatus = null;
-        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        // GitHub API accepts both 'Bearer' and 'token' schemes for PATs,
+        // but 'token' is the recommended scheme per GitHub documentation
+        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("token", token);
         _logger.LogInformation("GitHub token updated");
         return Task.CompletedTask;
     }
@@ -128,7 +130,8 @@ public class GitHubService : IGitHubService
 
                 page++;
 
-                // Safety limit
+                // Cap at 10 pages (1000 repos) to prevent excessive API calls
+                // for accounts with very large numbers of repositories
                 if (page > 10)
                     break;
             }

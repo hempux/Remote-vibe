@@ -66,7 +66,7 @@ public class GitHubController : ControllerBase
         {
             if (!_gitHubService.HasToken)
             {
-                return Unauthorized("GitHub token not configured. Please set a token first.");
+                return Unauthorized(new GitHubAuthStatusResponse { IsAuthenticated = false });
             }
 
             var repos = await _gitHubService.GetRepositoriesAsync(ct);

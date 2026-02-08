@@ -67,7 +67,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         try {
           await apiClient.setGitHubToken(token);
         } catch {
-          // Backend may not be reachable yet
+          // Expected during app startup: backend may not be available yet.
+          // Token will be re-sent when the user navigates to settings or starts a session.
         }
       }
     });
