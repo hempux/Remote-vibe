@@ -25,6 +25,7 @@ try
     builder.Services.AddSingleton<ISessionManager, SessionManager>();
     builder.Services.AddSingleton<ICopilotCliService, CopilotCliService>();
     builder.Services.AddSingleton<INotificationService, NotificationService>();
+    builder.Services.AddSingleton<IGitHubService, GitHubService>();
 
     // Configure CORS for SignalR
     builder.Services.AddCors(options =>

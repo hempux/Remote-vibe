@@ -2,7 +2,9 @@ namespace RemoteVibe.Backend.DTOs;
 
 public class StartSessionRequest
 {
-    public string RepositoryPath { get; set; } = string.Empty;
+    public string RepositoryOwner { get; set; } = string.Empty;
+    public string RepositoryName { get; set; } = string.Empty;
+    public string? TaskDescription { get; set; }
 }
 
 public class SendCommandRequest
@@ -19,11 +21,65 @@ public class RespondToQuestionRequest
 public class SessionStatusResponse
 {
     public string SessionId { get; set; } = string.Empty;
+    public string RepositoryOwner { get; set; } = string.Empty;
+    public string RepositoryName { get; set; } = string.Empty;
+    public string? TaskDescription { get; set; }
     public string Status { get; set; } = string.Empty;
     public DateTime StartedAt { get; set; }
     public DateTime? LastActivityAt { get; set; }
     public int MessageCount { get; set; }
     public int PendingQuestionCount { get; set; }
+}
+
+public class GitHubAuthRequest
+{
+    public string Token { get; set; } = string.Empty;
+}
+
+public class GitHubAuthStatusResponse
+{
+    public bool IsAuthenticated { get; set; }
+    public string? Username { get; set; }
+    public string? AvatarUrl { get; set; }
+}
+
+public class GitHubRepositoryResponse
+{
+    public string Owner { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string FullName { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? Language { get; set; }
+    public bool IsPrivate { get; set; }
+    public DateTime UpdatedAt { get; set; }
+    public string DefaultBranch { get; set; } = "main";
+}
+
+public class CopilotAuthRequest
+{
+    public string GitHubToken { get; set; } = string.Empty;
+}
+
+public class CopilotAuthStatusResponse
+{
+    public bool IsAuthenticated { get; set; }
+    public string? Username { get; set; }
+    public bool RequiresAdditionalAuth { get; set; }
+    public string? AuthUrl { get; set; }
+}
+
+public class UsageQuotaResponse
+{
+    public int PremiumRequestsUsed { get; set; }
+    public int PremiumRequestsLimit { get; set; }
+    public int PercentageUsed { get; set; }
+    public DateTime ResetDate { get; set; }
+}
+
+public class RegisterDeviceRequest
+{
+    public string DeviceToken { get; set; } = string.Empty;
+    public string Platform { get; set; } = string.Empty;
 }
 
 // DTOs for parsing rich responses from the standalone VS Code server

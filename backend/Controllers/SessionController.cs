@@ -52,18 +52,20 @@ public class SessionController : ControllerBase
     {
         try
         {
-            _logger.LogInformation("Starting session with repository path: {RepositoryPath}", request.RepositoryPath);
+            _logger.LogInformation("Starting session for repository: {Owner}/{Name}", request.RepositoryOwner, request.RepositoryName);
 
-            if (string.IsNullOrWhiteSpace(request.RepositoryPath))
+            if (string.IsNullOrWhiteSpace(request.RepositoryOwner) || string.IsNullOrWhiteSpace(request.RepositoryName))
             {
-                _logger.LogWarning("Repository path is empty");
-                return BadRequest("Repository path is required");
+                _logger.LogWarning("Repository owner or name is empty");
+                return BadRequest("Repository owner and name are required");
             }
 
-            var session = await _sessionManager.StartSessionAsync(request.RepositoryPath, ct);
+            var session = await _sessionManager.StartSessionAsync(
+                request.RepositoryOwner, request.RepositoryName, request.TaskDescription, ct);
             _logger.LogInformation("Session {SessionId} created", session.Id);
 
-            await _copilotCliService.StartSessionAsync(session.Id, request.RepositoryPath, ct);
+            var repositoryPath = $"{request.RepositoryOwner}/{request.RepositoryName}";
+            await _copilotCliService.StartSessionAsync(session.Id, repositoryPath, ct);
 
             var response = MapToStatusResponse(session);
 
@@ -71,7 +73,7 @@ public class SessionController : ControllerBase
             {
                 Type = NotificationType.SessionStarted,
                 Title = "Session Started",
-                Message = $"Session started for {request.RepositoryPath}",
+                Message = $"Session started for {repositoryPath}",
                 Priority = NotificationPriority.Low
             }, ct);
 
@@ -413,7 +415,10 @@ public class SessionController : ControllerBase
         var payload = new
         {
             sessionId = session.Id,
+            repositoryOwner = session.RepositoryOwner,
+            repositoryName = session.RepositoryName,
             repositoryPath = session.RepositoryPath,
+            taskDescription = session.TaskDescription,
             status = session.Status.ToString(),
             startedAt = session.StartedAt,
             lastActivityAt = session.LastActivityAt,
@@ -428,6 +433,9 @@ public class SessionController : ControllerBase
         return new SessionStatusResponse
         {
             SessionId = session.Id,
+            RepositoryOwner = session.RepositoryOwner,
+            RepositoryName = session.RepositoryName,
+            TaskDescription = session.TaskDescription,
             Status = session.Status.ToString(),
             StartedAt = session.StartedAt,
             LastActivityAt = session.LastActivityAt,

@@ -9,4 +9,7 @@ public interface ICopilotCliService
     Task<VsCodeCommandResponse> SendResponseAsync(string sessionId, string questionId, string response, CancellationToken ct = default);
     Task StopSessionAsync(string sessionId, CancellationToken ct = default);
     bool IsSessionActive(string sessionId);
+    Task<CopilotAuthStatusResponse> SetCopilotAuthAsync(string gitHubToken, CancellationToken ct = default);
+    Task<CopilotAuthStatusResponse> GetCopilotAuthStatusAsync(CancellationToken ct = default);
+    Task<UsageQuotaResponse> GetUsageQuotaAsync(CancellationToken ct = default);
 }

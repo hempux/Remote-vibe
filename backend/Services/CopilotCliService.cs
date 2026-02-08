@@ -166,4 +166,134 @@ public class CopilotCliService : ICopilotCliService
         var session = _sessionManager.GetSessionAsync(sessionId).GetAwaiter().GetResult();
         return session != null && session.Status != SessionStatus.Completed && session.Status != SessionStatus.Error;
     }
+
+    public async Task<CopilotAuthStatusResponse> SetCopilotAuthAsync(string gitHubToken, CancellationToken ct = default)
+    {
+        try
+        {
+            _logger.LogInformation("Setting Copilot auth via VS Code Server");
+
+            var requestBody = new { gitHubToken };
+            var requestMessage = new HttpRequestMessage(HttpMethod.Post, $"{_vscodeServerUrl}/extension/auth")
+            {
+                Content = JsonContent.Create(requestBody)
+            };
+            requestMessage.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _authToken);
+
+            var response = await _httpClient.SendAsync(requestMessage, ct);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<CopilotAuthStatusResponse>(_jsonOptions, ct);
+                return result ?? new CopilotAuthStatusResponse { IsAuthenticated = true };
+            }
+
+            var errorContent = await response.Content.ReadAsStringAsync(ct);
+            _logger.LogWarning("VS Code Server returned {StatusCode} for auth: {Error}", response.StatusCode, errorContent);
+
+            // If the extension server doesn't support this endpoint yet, report status based on health check
+            return new CopilotAuthStatusResponse
+            {
+                IsAuthenticated = false,
+                RequiresAdditionalAuth = true,
+                AuthUrl = null
+            };
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogWarning(ex, "Cannot reach VS Code Server for Copilot auth - server may not support auth endpoint yet");
+            return new CopilotAuthStatusResponse
+            {
+                IsAuthenticated = false,
+                RequiresAdditionalAuth = true
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to set Copilot auth");
+            throw;
+        }
+    }
+
+    public async Task<CopilotAuthStatusResponse> GetCopilotAuthStatusAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            _logger.LogInformation("Getting Copilot auth status from VS Code Server");
+
+            var requestMessage = new HttpRequestMessage(HttpMethod.Get, $"{_vscodeServerUrl}/extension/auth/status");
+            requestMessage.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _authToken);
+
+            var response = await _httpClient.SendAsync(requestMessage, ct);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<CopilotAuthStatusResponse>(_jsonOptions, ct);
+                return result ?? new CopilotAuthStatusResponse { IsAuthenticated = false };
+            }
+
+            // If the extension server doesn't support this endpoint, check health
+            var healthMessage = new HttpRequestMessage(HttpMethod.Get, $"{_vscodeServerUrl}/extension/health");
+            healthMessage.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _authToken);
+
+            var healthResponse = await _httpClient.SendAsync(healthMessage, ct);
+
+            return new CopilotAuthStatusResponse
+            {
+                IsAuthenticated = healthResponse.IsSuccessStatusCode,
+                Username = healthResponse.IsSuccessStatusCode ? "copilot" : null,
+            };
+        }
+        catch (HttpRequestException)
+        {
+            return new CopilotAuthStatusResponse { IsAuthenticated = false };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get Copilot auth status");
+            throw;
+        }
+    }
+
+    public async Task<UsageQuotaResponse> GetUsageQuotaAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            _logger.LogInformation("Getting usage quota from VS Code Server");
+
+            var requestMessage = new HttpRequestMessage(HttpMethod.Get, $"{_vscodeServerUrl}/extension/quota");
+            requestMessage.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _authToken);
+
+            var response = await _httpClient.SendAsync(requestMessage, ct);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<UsageQuotaResponse>(_jsonOptions, ct);
+                return result ?? GetDefaultQuota();
+            }
+
+            // If the extension doesn't support quota yet, return defaults
+            return GetDefaultQuota();
+        }
+        catch (HttpRequestException)
+        {
+            return GetDefaultQuota();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get usage quota");
+            throw;
+        }
+    }
+
+    private static UsageQuotaResponse GetDefaultQuota()
+    {
+        return new UsageQuotaResponse
+        {
+            PremiumRequestsUsed = 0,
+            PremiumRequestsLimit = 0,
+            PercentageUsed = 0,
+            ResetDate = DateTime.UtcNow.AddDays(30)
+        };
+    }
 }
