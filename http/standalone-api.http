@@ -1,0 +1,75 @@
+### Remote Vibe — VS Code Server Standalone API (port 5000)
+###
+### This API runs inside the vscode-server container and is not
+### exposed to the host by default. To use this file directly,
+### either:
+###   1. Forward the port:  docker exec ... or add "5000:5000" in docker-compose.yml
+###   2. Or run from inside the container:
+###      docker exec remote-vibe-vscode-server-1 curl -s http://localhost:5000/health
+###
+### If you've added port-forwarding, the requests below work as-is.
+
+@baseUrl = http://localhost:5000
+@authToken = remote-vibe-internal-token
+
+### -------------------------------------------------------
+### 1. Health Check (no auth required)
+### -------------------------------------------------------
+
+GET {{baseUrl}}/health
+
+### -------------------------------------------------------
+### 2. Start Session
+### -------------------------------------------------------
+
+POST {{baseUrl}}/extension/session/start
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "sessionId": "test-session-001",
+  "repositoryPath": "/home/coder/workspace"
+}
+
+### -------------------------------------------------------
+### 3. Send Command
+### -------------------------------------------------------
+
+@sessionId = test-session-001
+
+POST {{baseUrl}}/extension/command
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "sessionId": "{{sessionId}}",
+  "command": "Create a hello world script"
+}
+
+### -------------------------------------------------------
+### 4. Get Session Status
+### -------------------------------------------------------
+
+GET {{baseUrl}}/extension/session/{{sessionId}}/status
+Authorization: Bearer {{authToken}}
+
+### -------------------------------------------------------
+### 5. Respond to Question
+### -------------------------------------------------------
+
+POST {{baseUrl}}/extension/respond
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "sessionId": "{{sessionId}}",
+  "questionId": "q-1",
+  "response": "Yes"
+}
+
+### -------------------------------------------------------
+### 6. Stop Session
+### -------------------------------------------------------
+
+DELETE {{baseUrl}}/extension/session/{{sessionId}}
+Authorization: Bearer {{authToken}}

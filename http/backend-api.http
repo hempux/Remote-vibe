@@ -1,0 +1,78 @@
+### Remote Vibe — Backend API (port 5002)
+### Use with VS Code REST Client or JetBrains HTTP Client
+
+@baseUrl = http://localhost:5002
+
+### -------------------------------------------------------
+### 1. Health Check
+### -------------------------------------------------------
+
+GET {{baseUrl}}/health
+
+### -------------------------------------------------------
+### 2. List All Sessions
+### -------------------------------------------------------
+
+GET {{baseUrl}}/api/session
+
+### -------------------------------------------------------
+### 3. Start a New Session
+### -------------------------------------------------------
+
+POST {{baseUrl}}/api/session/start
+Content-Type: application/json
+
+{
+  "repositoryPath": "/workspace"
+}
+
+### -------------------------------------------------------
+### 4. Send a Command
+###    Replace {{sessionId}} with the sessionId from step 3
+### -------------------------------------------------------
+
+@sessionId = REPLACE_WITH_SESSION_ID
+
+POST {{baseUrl}}/api/session/{{sessionId}}/command
+Content-Type: application/json
+
+{
+  "command": "Create a Python hello world function"
+}
+
+### -------------------------------------------------------
+### 5. Get Session Status
+### -------------------------------------------------------
+
+GET {{baseUrl}}/api/session/{{sessionId}}/status
+
+### -------------------------------------------------------
+### 6. Get Conversation History
+### -------------------------------------------------------
+
+GET {{baseUrl}}/api/session/{{sessionId}}/history
+
+### -------------------------------------------------------
+### 7. Respond to a Question
+###    Replace questionId with an actual pending question ID
+### -------------------------------------------------------
+
+POST {{baseUrl}}/api/session/{{sessionId}}/respond
+Content-Type: application/json
+
+{
+  "questionId": "REPLACE_WITH_QUESTION_ID",
+  "response": "Yes, proceed with the changes"
+}
+
+### -------------------------------------------------------
+### 8. Stop (Delete) a Session
+### -------------------------------------------------------
+
+DELETE {{baseUrl}}/api/session/{{sessionId}}
+
+### -------------------------------------------------------
+### 9. Verify Session Was Removed
+### -------------------------------------------------------
+
+GET {{baseUrl}}/api/session

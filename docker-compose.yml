@@ -1,0 +1,43 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "5002:5002"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5002
+      - VscodeServerUrl=http://vscode-server:5000
+      - VscodeServerAuthToken=remote-vibe-internal-token
+    volumes:
+      - ./backend/logs:/app/logs
+    networks:
+      - remotevibe-network
+
+  vscode-server:
+    build:
+      context: .
+      dockerfile: ./vscode-server/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - PASSWORD=remotevibe
+      - REMOTE_VIBE_BACKEND_URL=http://backend:5002
+      - REMOTE_VIBE_AUTO_START=true
+      - REMOTE_VIBE_AUTH_TOKEN=remote-vibe-internal-token
+      - REMOTE_VIBE_PORT=5000
+    volumes:
+      - ./workspace:/home/coder/workspace
+      - vscode-data:/home/coder/.local/share/code-server
+    networks:
+      - remotevibe-network
+    depends_on:
+      - backend
+
+networks:
+  remotevibe-network:
+    driver: bridge
+
+volumes:
+  vscode-data:

@@ -1,0 +1,5 @@
+{
+  "remoteVibe.backendUrl": "http://backend:5002",
+  "remoteVibe.autoStart": true,
+  "remoteVibe.authToken": "remote-vibe-internal-token"
+}
