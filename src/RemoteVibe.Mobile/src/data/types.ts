@@ -31,6 +31,14 @@ export interface GitHubAuthStatus {
   avatarUrl: string | null;
 }
 
+export interface GitHubDeviceCode {
+  deviceCode: string;
+  userCode: string;
+  verificationUri: string;
+  expiresIn: number;
+  interval: number;
+}
+
 export interface CopilotAuthStatus {
   isAuthenticated: boolean;
   username: string | null;

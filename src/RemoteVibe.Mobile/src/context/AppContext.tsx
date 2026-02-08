@@ -60,20 +60,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Restore GitHub token to backend on startup
-  useEffect(() => {
-    storage.getGitHubToken().then(async (token) => {
-      if (token) {
-        try {
-          await apiClient.setGitHubToken(token);
-        } catch {
-          // Expected during app startup: backend may not be available yet.
-          // Token will be re-sent when the user navigates to settings or starts a session.
-        }
-      }
-    });
-  }, [backendUrl]);
-
   useEffect(() => {
     const unsubReconnecting = signalRService.onReconnecting(() => {
       setIsConnected(false);

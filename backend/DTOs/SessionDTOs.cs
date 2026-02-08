@@ -31,9 +31,13 @@ public class SessionStatusResponse
     public int PendingQuestionCount { get; set; }
 }
 
-public class GitHubAuthRequest
+public class GitHubDeviceCodeResponse
 {
-    public string Token { get; set; } = string.Empty;
+    public string DeviceCode { get; set; } = string.Empty;
+    public string UserCode { get; set; } = string.Empty;
+    public string VerificationUri { get; set; } = string.Empty;
+    public int ExpiresIn { get; set; }
+    public int Interval { get; set; }
 }
 
 public class GitHubAuthStatusResponse

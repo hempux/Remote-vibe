@@ -4,6 +4,7 @@ import {
   PendingQuestion,
   GitHubRepository,
   GitHubAuthStatus,
+  GitHubDeviceCode,
   CopilotAuthStatus,
   UsageQuota,
 } from '../data/types';
@@ -100,16 +101,28 @@ export async function stopSession(sessionId: string): Promise<void> {
   });
 }
 
-// GitHub APIs
-export async function setGitHubToken(token: string): Promise<GitHubAuthStatus> {
-  return request<GitHubAuthStatus>('/api/github/auth', {
+// GitHub OAuth APIs
+export async function initiateGitHubDeviceFlow(): Promise<GitHubDeviceCode> {
+  return request<GitHubDeviceCode>('/api/github/auth/device', {
     method: 'POST',
-    body: JSON.stringify({ token }),
+  });
+}
+
+export async function pollGitHubDeviceFlow(deviceCode: string): Promise<GitHubAuthStatus> {
+  return request<GitHubAuthStatus>('/api/github/auth/device/complete', {
+    method: 'POST',
+    body: JSON.stringify({ deviceCode }),
   });
 }
 
 export async function getGitHubAuthStatus(): Promise<GitHubAuthStatus> {
   return request<GitHubAuthStatus>('/api/github/auth/status');
+}
+
+export async function logoutGitHub(): Promise<void> {
+  return request<void>('/api/github/auth/logout', {
+    method: 'DELETE',
+  });
 }
 
 export async function getRepositories(): Promise<GitHubRepository[]> {

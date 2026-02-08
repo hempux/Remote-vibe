@@ -8,7 +8,8 @@ public class GitHubService : IGitHubService
 {
     private readonly ILogger<GitHubService> _logger;
     private readonly HttpClient _httpClient;
-    private string? _token;
+    private readonly string _clientId;
+    private string? _accessToken;
     private GitHubAuthStatusResponse? _cachedStatus;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -16,31 +17,129 @@ public class GitHubService : IGitHubService
         PropertyNameCaseInsensitive = true
     };
 
-    public GitHubService(ILogger<GitHubService> logger, IHttpClientFactory httpClientFactory)
+    public GitHubService(ILogger<GitHubService> logger, IHttpClientFactory httpClientFactory, IConfiguration configuration)
     {
         _logger = logger;
         _httpClient = httpClientFactory.CreateClient();
         _httpClient.BaseAddress = new Uri("https://api.github.com");
         _httpClient.DefaultRequestHeaders.Add("User-Agent", "RemoteVibe-Backend");
         _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        _clientId = configuration["GitHub:ClientId"] ?? "";
     }
 
-    public bool HasToken => !string.IsNullOrEmpty(_token);
+    public bool HasToken => !string.IsNullOrEmpty(_accessToken);
 
-    public Task SetTokenAsync(string token, CancellationToken ct = default)
+    public async Task<GitHubDeviceCodeResponse> InitiateDeviceFlowAsync(CancellationToken ct = default)
     {
-        _token = token;
+        if (string.IsNullOrEmpty(_clientId))
+        {
+            throw new InvalidOperationException("GitHub OAuth Client ID is not configured. Set GitHub:ClientId in appsettings.");
+        }
+
+        var requestBody = new FormUrlEncodedContent(new[]
+        {
+            new KeyValuePair<string, string>("client_id", _clientId),
+            new KeyValuePair<string, string>("scope", "repo read:user")
+        });
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "https://github.com/login/device/code")
+        {
+            Content = requestBody
+        };
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        var response = await _httpClient.SendAsync(request, ct);
+        var json = await response.Content.ReadAsStringAsync(ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogError("GitHub device flow initiation failed: {StatusCode} {Body}", response.StatusCode, json);
+            throw new InvalidOperationException($"GitHub device flow failed: {response.StatusCode}");
+        }
+
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        var result = new GitHubDeviceCodeResponse
+        {
+            DeviceCode = root.GetProperty("device_code").GetString() ?? "",
+            UserCode = root.GetProperty("user_code").GetString() ?? "",
+            VerificationUri = root.GetProperty("verification_uri").GetString() ?? "",
+            ExpiresIn = root.GetProperty("expires_in").GetInt32(),
+            Interval = root.GetProperty("interval").GetInt32(),
+        };
+
+        _logger.LogInformation("GitHub device flow initiated, user code: {UserCode}", result.UserCode);
+        return result;
+    }
+
+    public async Task<GitHubAuthStatusResponse> PollDeviceFlowAsync(string deviceCode, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(_clientId))
+        {
+            throw new InvalidOperationException("GitHub OAuth Client ID is not configured.");
+        }
+
+        var requestBody = new FormUrlEncodedContent(new[]
+        {
+            new KeyValuePair<string, string>("client_id", _clientId),
+            new KeyValuePair<string, string>("device_code", deviceCode),
+            new KeyValuePair<string, string>("grant_type", "urn:ietf:params:oauth:grant-type:device_code")
+        });
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "https://github.com/login/oauth/access_token")
+        {
+            Content = requestBody
+        };
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        var response = await _httpClient.SendAsync(request, ct);
+        var json = await response.Content.ReadAsStringAsync(ct);
+
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        // Check for error (authorization_pending, slow_down, etc.)
+        if (root.TryGetProperty("error", out var errorProp))
+        {
+            var error = errorProp.GetString();
+            if (error == "authorization_pending" || error == "slow_down")
+            {
+                return new GitHubAuthStatusResponse { IsAuthenticated = false };
+            }
+
+            _logger.LogWarning("GitHub OAuth poll error: {Error}", error);
+            throw new InvalidOperationException($"GitHub OAuth error: {error}");
+        }
+
+        // Success: we got an access token
+        if (root.TryGetProperty("access_token", out var tokenProp))
+        {
+            _accessToken = tokenProp.GetString();
+            _cachedStatus = null;
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+
+            _logger.LogInformation("GitHub OAuth device flow completed successfully");
+
+            // Fetch user info to return
+            return await GetAuthStatusAsync(ct);
+        }
+
+        return new GitHubAuthStatusResponse { IsAuthenticated = false };
+    }
+
+    public async Task LogoutAsync(CancellationToken ct = default)
+    {
+        _accessToken = null;
         _cachedStatus = null;
-        // GitHub API accepts both 'Bearer' and 'token' schemes for PATs,
-        // but 'token' is the recommended scheme per GitHub documentation
-        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("token", token);
-        _logger.LogInformation("GitHub token updated");
-        return Task.CompletedTask;
+        _httpClient.DefaultRequestHeaders.Authorization = null;
+        _logger.LogInformation("GitHub session cleared");
+        await Task.CompletedTask;
     }
 
     public async Task<GitHubAuthStatusResponse> GetAuthStatusAsync(CancellationToken ct = default)
     {
-        if (string.IsNullOrEmpty(_token))
+        if (string.IsNullOrEmpty(_accessToken))
         {
             return new GitHubAuthStatusResponse { IsAuthenticated = false };
         }
@@ -76,7 +175,7 @@ public class GitHubService : IGitHubService
 
     public async Task<IEnumerable<GitHubRepositoryResponse>> GetRepositoriesAsync(CancellationToken ct = default)
     {
-        if (string.IsNullOrEmpty(_token))
+        if (string.IsNullOrEmpty(_accessToken))
         {
             return Enumerable.Empty<GitHubRepositoryResponse>();
         }

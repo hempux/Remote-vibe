@@ -13,12 +13,12 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as WebBrowser from 'expo-web-browser';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GlassCard from '../components/GlassCard';
 import { useApp } from '../context/AppContext';
-import { GitHubAuthStatus, CopilotAuthStatus, UsageQuota } from '../data/types';
+import { GitHubAuthStatus, GitHubDeviceCode, CopilotAuthStatus, UsageQuota } from '../data/types';
 import * as apiClient from '../services/apiClient';
-import * as storage from '../services/storage';
 import { colors, borderRadius, spacing, typography } from '../theme/colors';
 
 export default function SettingsScreen() {
@@ -28,11 +28,12 @@ export default function SettingsScreen() {
   const [notifications, setNotifications] = useState(true);
   const [autoScroll, setAutoScroll] = useState(true);
 
-  // GitHub auth state
-  const [githubToken, setGithubToken] = useState('');
+  // GitHub OAuth state
   const [githubAuthStatus, setGithubAuthStatus] = useState<GitHubAuthStatus | null>(null);
   const [githubAuthLoading, setGithubAuthLoading] = useState(false);
-  const [githubTokenVisible, setGithubTokenVisible] = useState(false);
+  const [deviceCode, setDeviceCode] = useState<GitHubDeviceCode | null>(null);
+  const [polling, setPolling] = useState(false);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Copilot auth state
   const [copilotAuthStatus, setCopilotAuthStatus] = useState<CopilotAuthStatus | null>(null);
@@ -52,13 +53,6 @@ export default function SettingsScreen() {
     setUrlInput(backendUrl);
   }, [backendUrl]);
 
-  // Load saved GitHub token
-  useEffect(() => {
-    storage.getGitHubToken().then((token) => {
-      if (token) setGithubToken(token);
-    });
-  }, []);
-
   // Fetch auth statuses when connected
   useEffect(() => {
     if (isConnected) {
@@ -67,6 +61,15 @@ export default function SettingsScreen() {
       loadUsageQuota();
     }
   }, [isConnected]);
+
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (isConnected) {
@@ -137,33 +140,69 @@ export default function SettingsScreen() {
     }
   }, [isConnected, connect, disconnect]);
 
-  const handleSaveGitHubToken = async () => {
-    const trimmed = githubToken.trim();
-    if (!trimmed) return;
+  const handleGitHubSignIn = async () => {
     setGithubAuthLoading(true);
     try {
-      await storage.setGitHubToken(trimmed);
-      const status = await apiClient.setGitHubToken(trimmed);
-      setGithubAuthStatus(status);
+      const device = await apiClient.initiateGitHubDeviceFlow();
+      setDeviceCode(device);
+
+      // Open the verification URL in the browser
+      await WebBrowser.openBrowserAsync(device.verificationUri);
+
+      // Start polling for completion
+      setPolling(true);
+      const interval = (device.interval || 5) * 1000;
+      pollingRef.current = setInterval(async () => {
+        try {
+          const status = await apiClient.pollGitHubDeviceFlow(device.deviceCode);
+          if (status.isAuthenticated) {
+            if (pollingRef.current) clearInterval(pollingRef.current);
+            pollingRef.current = null;
+            setPolling(false);
+            setDeviceCode(null);
+            setGithubAuthStatus(status);
+            setGithubAuthLoading(false);
+          }
+        } catch {
+          // Poll error (e.g., expired) — stop polling
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          pollingRef.current = null;
+          setPolling(false);
+          setDeviceCode(null);
+          setGithubAuthLoading(false);
+        }
+      }, interval);
     } catch {
-      setGithubAuthStatus({ isAuthenticated: false, username: null, avatarUrl: null });
-    } finally {
       setGithubAuthLoading(false);
+      setDeviceCode(null);
     }
   };
 
-  const handleClearGitHubToken = async () => {
-    setGithubToken('');
-    await storage.clearGitHubToken();
+  const handleCancelOAuth = () => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    setPolling(false);
+    setDeviceCode(null);
+    setGithubAuthLoading(false);
+  };
+
+  const handleGitHubLogout = async () => {
+    try {
+      await apiClient.logoutGitHub();
+    } catch {
+      // Continue with local logout even if backend call fails
+    }
     setGithubAuthStatus(null);
   };
 
   const handleCopilotAuth = async () => {
-    const trimmed = githubToken.trim();
-    if (!trimmed) return;
+    if (!githubAuthStatus?.isAuthenticated) return;
     setCopilotAuthLoading(true);
     try {
-      const status = await apiClient.setCopilotAuth(trimmed);
+      // Use an empty token — the backend already has the OAuth token
+      const status = await apiClient.setCopilotAuth('');
       setCopilotAuthStatus(status);
     } catch {
       setCopilotAuthStatus({ isAuthenticated: false, username: null, requiresAdditionalAuth: true, authUrl: null });
@@ -373,58 +412,65 @@ export default function SettingsScreen() {
                     Authenticated as {githubAuthStatus.username}
                   </Text>
                 </View>
-                <TouchableOpacity onPress={handleClearGitHubToken} activeOpacity={0.7}>
+                <TouchableOpacity onPress={handleGitHubLogout} activeOpacity={0.7}>
                   <Text style={styles.logoutText}>Logout</Text>
                 </TouchableOpacity>
               </View>
-            ) : (
-              <>
-                <Text style={styles.fieldLabel}>Personal Access Token</Text>
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    style={styles.input}
-                    value={githubToken}
-                    onChangeText={setGithubToken}
-                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                    placeholderTextColor={colors.textTertiary}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    secureTextEntry={!githubTokenVisible}
-                  />
+            ) : deviceCode && polling ? (
+              // Device flow in progress — show user code
+              <View>
+                <Text style={styles.oauthInstructions}>
+                  Enter this code on GitHub to sign in:
+                </Text>
+                <View style={styles.userCodeContainer}>
+                  <Text style={styles.userCodeText}>{deviceCode.userCode}</Text>
+                </View>
+                <Text style={styles.oauthHint}>
+                  A browser window has been opened. Enter the code above to authorize RemoteVibe.
+                </Text>
+                <View style={styles.oauthActions}>
                   <TouchableOpacity
-                    onPress={() => setGithubTokenVisible(!githubTokenVisible)}
-                    style={styles.toggleVisibility}
+                    onPress={() => WebBrowser.openBrowserAsync(deviceCode.verificationUri)}
+                    activeOpacity={0.7}
+                    style={styles.oauthReopenButton}
                   >
-                    <Text style={styles.toggleVisibilityText}>
-                      {githubTokenVisible ? 'Hide' : 'Show'}
-                    </Text>
+                    <Text style={styles.oauthReopenText}>Reopen Browser</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleCancelOAuth} activeOpacity={0.7}>
+                    <Text style={styles.logoutText}>Cancel</Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.inputHint}>
-                  Token needs repo scope to list your repositories
+                <View style={styles.pollingIndicator}>
+                  <ActivityIndicator size="small" color={colors.electricBlue} />
+                  <Text style={styles.pollingText}>Waiting for authorization...</Text>
+                </View>
+              </View>
+            ) : (
+              // Not authenticated — show sign in button
+              <View>
+                <Text style={styles.oauthDescription}>
+                  Sign in with your GitHub account using OAuth to access your repositories.
                 </Text>
-                {githubToken.trim().length > 0 && (
-                  <TouchableOpacity
-                    onPress={handleSaveGitHubToken}
-                    activeOpacity={0.7}
-                    style={styles.saveButton}
-                    disabled={githubAuthLoading}
+                <TouchableOpacity
+                  onPress={handleGitHubSignIn}
+                  activeOpacity={0.7}
+                  style={styles.saveButton}
+                  disabled={githubAuthLoading}
+                >
+                  <LinearGradient
+                    colors={[colors.electricBlue, colors.neonPurple]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.saveButtonGradient}
                   >
-                    <LinearGradient
-                      colors={[colors.electricBlue, colors.neonPurple]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.saveButtonGradient}
-                    >
-                      {githubAuthLoading ? (
-                        <ActivityIndicator size="small" color={colors.textPrimary} />
-                      ) : (
-                        <Text style={styles.saveButtonText}>Authenticate</Text>
-                      )}
-                    </LinearGradient>
-                  </TouchableOpacity>
-                )}
-              </>
+                    {githubAuthLoading ? (
+                      <ActivityIndicator size="small" color={colors.textPrimary} />
+                    ) : (
+                      <Text style={styles.saveButtonText}>Sign in with GitHub</Text>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         </GlassCard>
@@ -470,7 +516,7 @@ export default function SettingsScreen() {
               <TouchableOpacity
                 onPress={handleCopilotAuth}
                 activeOpacity={0.7}
-                disabled={copilotAuthLoading || !githubToken.trim()}
+                disabled={copilotAuthLoading || !githubAuthStatus?.isAuthenticated}
               >
                 <LinearGradient
                   colors={[colors.neonPurple + '20', colors.electricBlue + '10']}
@@ -491,9 +537,9 @@ export default function SettingsScreen() {
                 Additional authentication may be required. Ensure GitHub Copilot is active on your account.
               </Text>
             )}
-            {!githubToken.trim() && (
+            {!githubAuthStatus?.isAuthenticated && (
               <Text style={styles.authWarning}>
-                Set your GitHub token above first to authenticate with Copilot.
+                Sign in with GitHub above first to authenticate with Copilot.
               </Text>
             )}
           </View>
@@ -863,7 +909,7 @@ const styles = StyleSheet.create({
     color: colors.textTertiary,
   },
 
-  // GitHub Auth
+  // GitHub OAuth
   authStatusRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -881,16 +927,70 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.neonRed,
   },
-  toggleVisibility: {
-    position: 'absolute',
-    right: spacing.md,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
+  oauthDescription: {
+    ...typography.body,
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginBottom: spacing.md,
   },
-  toggleVisibilityText: {
+  oauthInstructions: {
+    ...typography.body,
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+  userCodeContainer: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.electricBlue + '40',
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  userCodeText: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: colors.electricBlue,
+    letterSpacing: 4,
+    fontFamily: 'monospace',
+  },
+  oauthHint: {
+    ...typography.caption,
+    fontSize: 11,
+    textAlign: 'center',
+    marginBottom: spacing.md,
+  },
+  oauthActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  oauthReopenButton: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.electricBlue + '30',
+    backgroundColor: colors.electricBlue + '10',
+  },
+  oauthReopenText: {
     fontSize: 12,
     fontWeight: '600',
+    color: colors.electricBlue,
+  },
+  pollingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  pollingText: {
+    ...typography.caption,
+    fontSize: 12,
     color: colors.electricBlue,
   },
   authWarning: {
