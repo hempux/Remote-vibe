@@ -128,13 +128,13 @@ public class GitHubService : IGitHubService
         return new GitHubAuthStatusResponse { IsAuthenticated = false };
     }
 
-    public async Task LogoutAsync(CancellationToken ct = default)
+    public Task LogoutAsync(CancellationToken ct = default)
     {
         _accessToken = null;
         _cachedStatus = null;
         _httpClient.DefaultRequestHeaders.Authorization = null;
         _logger.LogInformation("GitHub session cleared");
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
     public async Task<GitHubAuthStatusResponse> GetAuthStatusAsync(CancellationToken ct = default)

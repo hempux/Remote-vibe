@@ -33,6 +33,7 @@ export default function SettingsScreen() {
   const [githubAuthLoading, setGithubAuthLoading] = useState(false);
   const [deviceCode, setDeviceCode] = useState<GitHubDeviceCode | null>(null);
   const [polling, setPolling] = useState(false);
+  const [oauthError, setOauthError] = useState<string | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Copilot auth state
@@ -142,6 +143,7 @@ export default function SettingsScreen() {
 
   const handleGitHubSignIn = async () => {
     setGithubAuthLoading(true);
+    setOauthError(null);
     try {
       const device = await apiClient.initiateGitHubDeviceFlow();
       setDeviceCode(device);
@@ -164,17 +166,19 @@ export default function SettingsScreen() {
             setGithubAuthLoading(false);
           }
         } catch {
-          // Poll error (e.g., expired) — stop polling
+          // Poll error (e.g., code expired or was denied)
           if (pollingRef.current) clearInterval(pollingRef.current);
           pollingRef.current = null;
           setPolling(false);
           setDeviceCode(null);
           setGithubAuthLoading(false);
+          setOauthError('Authorization expired or was denied. Please try again.');
         }
       }, interval);
     } catch {
       setGithubAuthLoading(false);
       setDeviceCode(null);
+      setOauthError('Failed to start GitHub sign-in. Check your backend connection.');
     }
   };
 
@@ -201,7 +205,8 @@ export default function SettingsScreen() {
     if (!githubAuthStatus?.isAuthenticated) return;
     setCopilotAuthLoading(true);
     try {
-      // Use an empty token — the backend already has the OAuth token
+      // Backend already has the OAuth access token from the device flow;
+      // the Copilot auth endpoint uses it to authenticate with the extension server
       const status = await apiClient.setCopilotAuth('');
       setCopilotAuthStatus(status);
     } catch {
@@ -451,6 +456,9 @@ export default function SettingsScreen() {
                 <Text style={styles.oauthDescription}>
                   Sign in with your GitHub account using OAuth to access your repositories.
                 </Text>
+                {oauthError && (
+                  <Text style={styles.oauthErrorText}>{oauthError}</Text>
+                )}
                 <TouchableOpacity
                   onPress={handleGitHubSignIn}
                   activeOpacity={0.7}
@@ -932,6 +940,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textSecondary,
     marginBottom: spacing.md,
+  },
+  oauthErrorText: {
+    ...typography.caption,
+    color: colors.neonRed,
+    marginBottom: spacing.md,
+    textAlign: 'center',
   },
   oauthInstructions: {
     ...typography.body,
