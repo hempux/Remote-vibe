@@ -2,6 +2,10 @@ import {
   Session,
   ConversationMessage,
   PendingQuestion,
+  GitHubRepository,
+  GitHubAuthStatus,
+  CopilotAuthStatus,
+  UsageQuota,
 } from '../data/types';
 
 let baseUrl = 'https://localhost:5002';
@@ -36,14 +40,19 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return undefined as T;
 }
 
+// Session APIs
 export async function getAllSessions(): Promise<Session[]> {
   return request<Session[]>('/api/session');
 }
 
-export async function startSession(repositoryPath: string): Promise<Session> {
+export async function startSession(
+  repositoryOwner: string,
+  repositoryName: string,
+  taskDescription?: string
+): Promise<Session> {
   return request<Session>('/api/session/start', {
     method: 'POST',
-    body: JSON.stringify({ repositoryPath }),
+    body: JSON.stringify({ repositoryOwner, repositoryName, taskDescription }),
   });
 }
 
@@ -87,6 +96,52 @@ export async function getPendingQuestions(
 
 export async function stopSession(sessionId: string): Promise<void> {
   return request<void>(`/api/session/${sessionId}`, {
+    method: 'DELETE',
+  });
+}
+
+// GitHub APIs
+export async function setGitHubToken(token: string): Promise<GitHubAuthStatus> {
+  return request<GitHubAuthStatus>('/api/github/auth', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  });
+}
+
+export async function getGitHubAuthStatus(): Promise<GitHubAuthStatus> {
+  return request<GitHubAuthStatus>('/api/github/auth/status');
+}
+
+export async function getRepositories(): Promise<GitHubRepository[]> {
+  return request<GitHubRepository[]>('/api/github/repositories');
+}
+
+// Copilot APIs
+export async function setCopilotAuth(gitHubToken: string): Promise<CopilotAuthStatus> {
+  return request<CopilotAuthStatus>('/api/copilot/auth', {
+    method: 'POST',
+    body: JSON.stringify({ gitHubToken }),
+  });
+}
+
+export async function getCopilotAuthStatus(): Promise<CopilotAuthStatus> {
+  return request<CopilotAuthStatus>('/api/copilot/auth/status');
+}
+
+export async function getUsageQuota(): Promise<UsageQuota> {
+  return request<UsageQuota>('/api/copilot/quota');
+}
+
+// Notification APIs
+export async function registerDevice(deviceToken: string, platform: string): Promise<void> {
+  return request<void>('/api/notifications/register', {
+    method: 'POST',
+    body: JSON.stringify({ deviceToken, platform }),
+  });
+}
+
+export async function unregisterDevice(deviceToken: string): Promise<void> {
+  return request<void>(`/api/notifications/unregister/${deviceToken}`, {
     method: 'DELETE',
   });
 }

@@ -5,6 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import SessionsListScreen from '../screens/SessionsListScreen';
 import SessionDashboardScreen from '../screens/SessionDashboardScreen';
+import NewSessionScreen from '../screens/NewSessionScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import FloatingTabBar from '../components/FloatingTabBar';
 import { colors } from '../theme/colors';
@@ -17,6 +18,7 @@ export type RootTabParamList = {
 export type SessionsStackParamList = {
   SessionsList: undefined;
   SessionDashboard: { sessionId: string };
+  NewSession: undefined;
 };
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
@@ -43,6 +45,7 @@ function SessionsStack() {
       }}
     >
       <Stack.Screen name="SessionsList" component={SessionsListScreen} />
+      <Stack.Screen name="NewSession" component={NewSessionScreen} />
       <Stack.Screen name="SessionDashboard" component={SessionDashboardScreen} />
     </Stack.Navigator>
   );

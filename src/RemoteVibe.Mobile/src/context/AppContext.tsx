@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { signalRService } from '../services/signalRService';
 import * as apiClient from '../services/apiClient';
 import * as storage from '../services/storage';
+import * as notificationService from '../services/notificationService';
 import { Session, ConversationMessage, PendingQuestion } from '../data/types';
 
 interface AppContextType {
@@ -14,6 +15,7 @@ interface AppContextType {
   subscribeSessionStatus: (cb: (session: Session) => void) => () => void;
   subscribeMessage: (cb: (msg: ConversationMessage) => void) => () => void;
   subscribeQuestion: (cb: (q: PendingQuestion) => void) => () => void;
+  pushToken: string | null;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -28,17 +30,48 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [backendUrl, setBackendUrlState] = useState('https://localhost:5002');
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [pushToken, setPushToken] = useState<string | null>(null);
   const initialized = useRef(false);
 
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
 
+    // Load saved settings
     storage.getBackendUrl().then((url) => {
       setBackendUrlState(url);
       apiClient.setBaseUrl(url);
     });
+
+    // Initialize push notifications
+    notificationService.registerForPushNotifications().then((token) => {
+      if (token) setPushToken(token);
+    });
+
+    // Set up notification response listener (for when user taps notification)
+    const responseSubscription = notificationService.addNotificationResponseListener((response) => {
+      const data = response.notification.request.content.data;
+      // Navigation to specific session could be handled here with a global navigator ref
+      // For now, the notification will bring the app to the foreground
+    });
+
+    return () => {
+      responseSubscription.remove();
+    };
   }, []);
+
+  // Restore GitHub token to backend on startup
+  useEffect(() => {
+    storage.getGitHubToken().then(async (token) => {
+      if (token) {
+        try {
+          await apiClient.setGitHubToken(token);
+        } catch {
+          // Backend may not be reachable yet
+        }
+      }
+    });
+  }, [backendUrl]);
 
   useEffect(() => {
     const unsubReconnecting = signalRService.onReconnecting(() => {
@@ -111,6 +144,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         subscribeSessionStatus,
         subscribeMessage,
         subscribeQuestion,
+        pushToken,
       }}
     >
       {children}

@@ -10,11 +10,15 @@ import {
   Animated,
   useWindowDimensions,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import GlassCard from '../components/GlassCard';
 import { useApp } from '../context/AppContext';
+import { GitHubAuthStatus, CopilotAuthStatus, UsageQuota } from '../data/types';
+import * as apiClient from '../services/apiClient';
+import * as storage from '../services/storage';
 import { colors, borderRadius, spacing, typography } from '../theme/colors';
 
 export default function SettingsScreen() {
@@ -23,6 +27,21 @@ export default function SettingsScreen() {
   const [urlSaved, setUrlSaved] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const [autoScroll, setAutoScroll] = useState(true);
+
+  // GitHub auth state
+  const [githubToken, setGithubToken] = useState('');
+  const [githubAuthStatus, setGithubAuthStatus] = useState<GitHubAuthStatus | null>(null);
+  const [githubAuthLoading, setGithubAuthLoading] = useState(false);
+  const [githubTokenVisible, setGithubTokenVisible] = useState(false);
+
+  // Copilot auth state
+  const [copilotAuthStatus, setCopilotAuthStatus] = useState<CopilotAuthStatus | null>(null);
+  const [copilotAuthLoading, setCopilotAuthLoading] = useState(false);
+
+  // Usage quota state
+  const [usageQuota, setUsageQuota] = useState<UsageQuota | null>(null);
+  const [quotaLoading, setQuotaLoading] = useState(false);
+
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isTablet = width > 768;
@@ -32,6 +51,22 @@ export default function SettingsScreen() {
   useEffect(() => {
     setUrlInput(backendUrl);
   }, [backendUrl]);
+
+  // Load saved GitHub token
+  useEffect(() => {
+    storage.getGitHubToken().then((token) => {
+      if (token) setGithubToken(token);
+    });
+  }, []);
+
+  // Fetch auth statuses when connected
+  useEffect(() => {
+    if (isConnected) {
+      loadGitHubAuthStatus();
+      loadCopilotAuthStatus();
+      loadUsageQuota();
+    }
+  }, [isConnected]);
 
   useEffect(() => {
     if (isConnected) {
@@ -56,6 +91,36 @@ export default function SettingsScreen() {
     }
   }, [isConnected, pulseAnim]);
 
+  const loadGitHubAuthStatus = async () => {
+    try {
+      const status = await apiClient.getGitHubAuthStatus();
+      setGithubAuthStatus(status);
+    } catch {
+      // Silently fail - will show as disconnected
+    }
+  };
+
+  const loadCopilotAuthStatus = async () => {
+    try {
+      const status = await apiClient.getCopilotAuthStatus();
+      setCopilotAuthStatus(status);
+    } catch {
+      // Silently fail
+    }
+  };
+
+  const loadUsageQuota = async () => {
+    setQuotaLoading(true);
+    try {
+      const quota = await apiClient.getUsageQuota();
+      setUsageQuota(quota);
+    } catch {
+      // Silently fail
+    } finally {
+      setQuotaLoading(false);
+    }
+  };
+
   const handleSaveUrl = useCallback(async () => {
     const trimmed = urlInput.trim();
     if (!trimmed || trimmed === backendUrl) return;
@@ -72,6 +137,41 @@ export default function SettingsScreen() {
     }
   }, [isConnected, connect, disconnect]);
 
+  const handleSaveGitHubToken = async () => {
+    const trimmed = githubToken.trim();
+    if (!trimmed) return;
+    setGithubAuthLoading(true);
+    try {
+      await storage.setGitHubToken(trimmed);
+      const status = await apiClient.setGitHubToken(trimmed);
+      setGithubAuthStatus(status);
+    } catch {
+      setGithubAuthStatus({ isAuthenticated: false, username: null, avatarUrl: null });
+    } finally {
+      setGithubAuthLoading(false);
+    }
+  };
+
+  const handleClearGitHubToken = async () => {
+    setGithubToken('');
+    await storage.clearGitHubToken();
+    setGithubAuthStatus(null);
+  };
+
+  const handleCopilotAuth = async () => {
+    const trimmed = githubToken.trim();
+    if (!trimmed) return;
+    setCopilotAuthLoading(true);
+    try {
+      const status = await apiClient.setCopilotAuth(trimmed);
+      setCopilotAuthStatus(status);
+    } catch {
+      setCopilotAuthStatus({ isAuthenticated: false, username: null, requiresAdditionalAuth: true, authUrl: null });
+    } finally {
+      setCopilotAuthLoading(false);
+    }
+  };
+
   const connectionLabel = isConnecting
     ? 'Connecting...'
     : isConnected
@@ -83,6 +183,16 @@ export default function SettingsScreen() {
     : isConnected
       ? colors.neonGreen
       : colors.neonRed;
+
+  const quotaPercentage = usageQuota && usageQuota.premiumRequestsLimit > 0
+    ? Math.round((usageQuota.premiumRequestsUsed / usageQuota.premiumRequestsLimit) * 100)
+    : 0;
+
+  const quotaColor = quotaPercentage > 80
+    ? colors.neonRed
+    : quotaPercentage > 50
+      ? colors.neonYellow
+      : colors.neonGreen;
 
   return (
     <View style={styles.container}>
@@ -240,6 +350,198 @@ export default function SettingsScreen() {
                   <Text style={styles.saveButtonText}>Save URL</Text>
                 </LinearGradient>
               </TouchableOpacity>
+            )}
+          </View>
+        </GlassCard>
+
+        {/* GitHub Authentication */}
+        <GlassCard
+          gradientBorder={
+            githubAuthStatus?.isAuthenticated
+              ? [colors.neonGreen + '40', colors.electricBlue + '20']
+              : undefined
+          }
+          style={styles.card}
+        >
+          <View style={styles.cardInner}>
+            <Text style={styles.cardTitle}>GitHub Authentication</Text>
+            {githubAuthStatus?.isAuthenticated ? (
+              <View style={styles.authStatusRow}>
+                <View style={styles.authStatusInfo}>
+                  <View style={[styles.connectionDot, { backgroundColor: colors.neonGreen }]} />
+                  <Text style={[styles.connectionStatus, { color: colors.neonGreen }]}>
+                    Authenticated as {githubAuthStatus.username}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={handleClearGitHubToken} activeOpacity={0.7}>
+                  <Text style={styles.logoutText}>Logout</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.fieldLabel}>Personal Access Token</Text>
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    style={styles.input}
+                    value={githubToken}
+                    onChangeText={setGithubToken}
+                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                    placeholderTextColor={colors.textTertiary}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    secureTextEntry={!githubTokenVisible}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setGithubTokenVisible(!githubTokenVisible)}
+                    style={styles.toggleVisibility}
+                  >
+                    <Text style={styles.toggleVisibilityText}>
+                      {githubTokenVisible ? 'Hide' : 'Show'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.inputHint}>
+                  Token needs repo scope to list your repositories
+                </Text>
+                {githubToken.trim().length > 0 && (
+                  <TouchableOpacity
+                    onPress={handleSaveGitHubToken}
+                    activeOpacity={0.7}
+                    style={styles.saveButton}
+                    disabled={githubAuthLoading}
+                  >
+                    <LinearGradient
+                      colors={[colors.electricBlue, colors.neonPurple]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.saveButtonGradient}
+                    >
+                      {githubAuthLoading ? (
+                        <ActivityIndicator size="small" color={colors.textPrimary} />
+                      ) : (
+                        <Text style={styles.saveButtonText}>Authenticate</Text>
+                      )}
+                    </LinearGradient>
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
+          </View>
+        </GlassCard>
+
+        {/* Copilot Authentication */}
+        <GlassCard
+          gradientBorder={
+            copilotAuthStatus?.isAuthenticated
+              ? [colors.neonGreen + '40', colors.neonPurple + '20']
+              : undefined
+          }
+          style={styles.card}
+        >
+          <View style={styles.cardInner}>
+            <Text style={styles.cardTitle}>Copilot Authentication</Text>
+            <View style={styles.authStatusRow}>
+              <View style={styles.authStatusInfo}>
+                <View
+                  style={[
+                    styles.connectionDot,
+                    {
+                      backgroundColor: copilotAuthStatus?.isAuthenticated
+                        ? colors.neonGreen
+                        : colors.neonRed,
+                    },
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.connectionStatus,
+                    {
+                      color: copilotAuthStatus?.isAuthenticated
+                        ? colors.neonGreen
+                        : colors.textTertiary,
+                    },
+                  ]}
+                >
+                  {copilotAuthStatus?.isAuthenticated
+                    ? `Connected${copilotAuthStatus.username ? ` as ${copilotAuthStatus.username}` : ''}`
+                    : 'Not connected'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={handleCopilotAuth}
+                activeOpacity={0.7}
+                disabled={copilotAuthLoading || !githubToken.trim()}
+              >
+                <LinearGradient
+                  colors={[colors.neonPurple + '20', colors.electricBlue + '10']}
+                  style={styles.reconnectButton}
+                >
+                  {copilotAuthLoading ? (
+                    <ActivityIndicator size="small" color={colors.neonPurple} />
+                  ) : (
+                    <Text style={[styles.reconnectText, { color: colors.neonPurple }]}>
+                      {copilotAuthStatus?.isAuthenticated ? 'Refresh' : 'Authenticate'}
+                    </Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+            {copilotAuthStatus?.requiresAdditionalAuth && (
+              <Text style={styles.authWarning}>
+                Additional authentication may be required. Ensure GitHub Copilot is active on your account.
+              </Text>
+            )}
+            {!githubToken.trim() && (
+              <Text style={styles.authWarning}>
+                Set your GitHub token above first to authenticate with Copilot.
+              </Text>
+            )}
+          </View>
+        </GlassCard>
+
+        {/* Usage Quota */}
+        <GlassCard style={styles.card}>
+          <View style={styles.cardInner}>
+            <View style={styles.quotaHeader}>
+              <Text style={styles.cardTitle}>Premium Usage</Text>
+              <TouchableOpacity onPress={loadUsageQuota} activeOpacity={0.7} disabled={quotaLoading}>
+                {quotaLoading ? (
+                  <ActivityIndicator size="small" color={colors.electricBlue} />
+                ) : (
+                  <Text style={styles.refreshText}>Refresh</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+            {usageQuota && usageQuota.premiumRequestsLimit > 0 ? (
+              <>
+                <View style={styles.quotaBarContainer}>
+                  <View style={styles.quotaBarBackground}>
+                    <LinearGradient
+                      colors={[quotaColor, quotaColor + '80']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={[styles.quotaBarFill, { width: `${Math.min(quotaPercentage, 100)}%` }]}
+                    />
+                  </View>
+                </View>
+                <View style={styles.quotaStats}>
+                  <Text style={styles.quotaText}>
+                    <Text style={[styles.quotaValue, { color: quotaColor }]}>
+                      {usageQuota.premiumRequestsUsed}
+                    </Text>
+                    {' / '}
+                    {usageQuota.premiumRequestsLimit} requests
+                  </Text>
+                  <Text style={styles.quotaPercent}>{quotaPercentage}% used</Text>
+                </View>
+                <Text style={styles.quotaReset}>
+                  Resets {new Date(usageQuota.resetDate).toLocaleDateString()}
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.quotaUnavailable}>
+                Usage data not available. The VS Code server may not support quota reporting yet.
+              </Text>
             )}
           </View>
         </GlassCard>
@@ -559,5 +861,94 @@ const styles = StyleSheet.create({
     ...typography.body,
     marginTop: spacing.sm,
     color: colors.textTertiary,
+  },
+
+  // GitHub Auth
+  authStatusRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+  },
+  authStatusInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+  },
+  logoutText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.neonRed,
+  },
+  toggleVisibility: {
+    position: 'absolute',
+    right: spacing.md,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+  },
+  toggleVisibilityText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.electricBlue,
+  },
+  authWarning: {
+    ...typography.caption,
+    color: colors.neonYellow,
+    marginTop: spacing.sm,
+  },
+
+  // Quota
+  quotaHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  refreshText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.electricBlue,
+  },
+  quotaBarContainer: {
+    marginBottom: spacing.md,
+  },
+  quotaBarBackground: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
+  },
+  quotaBarFill: {
+    height: 8,
+    borderRadius: 4,
+  },
+  quotaStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  quotaText: {
+    ...typography.body,
+    fontSize: 13,
+  },
+  quotaValue: {
+    fontWeight: '700',
+  },
+  quotaPercent: {
+    ...typography.caption,
+    fontWeight: '600',
+  },
+  quotaReset: {
+    ...typography.caption,
+    fontSize: 11,
+  },
+  quotaUnavailable: {
+    ...typography.body,
+    fontSize: 13,
+    color: colors.textTertiary,
+    fontStyle: 'italic',
   },
 });

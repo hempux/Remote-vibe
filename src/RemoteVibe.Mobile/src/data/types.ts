@@ -2,13 +2,47 @@ export type SessionStatus = 'Processing' | 'WaitingForInput' | 'Completed' | 'Id
 
 export interface Session {
   sessionId: string;
+  repositoryOwner?: string;
+  repositoryName?: string;
   repositoryPath?: string;
+  taskDescription?: string;
   status: SessionStatus;
   startedAt: string;
   lastActivityAt: string | null;
   currentCommand: string | null;
   messageCount?: number;
   pendingQuestionCount?: number;
+}
+
+export interface GitHubRepository {
+  owner: string;
+  name: string;
+  fullName: string;
+  description: string | null;
+  language: string | null;
+  isPrivate: boolean;
+  updatedAt: string;
+  defaultBranch: string;
+}
+
+export interface GitHubAuthStatus {
+  isAuthenticated: boolean;
+  username: string | null;
+  avatarUrl: string | null;
+}
+
+export interface CopilotAuthStatus {
+  isAuthenticated: boolean;
+  username: string | null;
+  requiresAdditionalAuth: boolean;
+  authUrl: string | null;
+}
+
+export interface UsageQuota {
+  premiumRequestsUsed: number;
+  premiumRequestsLimit: number;
+  percentageUsed: number;
+  resetDate: string;
 }
 
 export type MessageRole = 'User' | 'Assistant' | 'System';
