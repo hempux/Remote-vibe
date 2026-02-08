@@ -382,6 +382,7 @@ process.on('SIGTERM', () => {
 });
 
 process.on('SIGINT', () => {
+    console.log(`[${new Date().toISOString()}] Received SIGINT, closing database...`);
     db.close();
     process.exit(0);
 });

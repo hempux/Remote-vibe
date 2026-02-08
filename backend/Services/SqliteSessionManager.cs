@@ -127,7 +127,7 @@ public class SqliteSessionManager : ISessionManager, IDisposable
             using var reader = cmd.ExecuteReader();
             if (reader.Read())
             {
-                return await ReadSessionWithRelations(reader);
+                return ReadSessionWithRelations(reader);
             }
             return null;
         }
@@ -149,7 +149,7 @@ public class SqliteSessionManager : ISessionManager, IDisposable
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
-                sessions.Add(await ReadSessionWithRelations(reader));
+                sessions.Add(ReadSessionWithRelations(reader));
             }
             return sessions;
         }
@@ -171,7 +171,7 @@ public class SqliteSessionManager : ISessionManager, IDisposable
             using var reader = cmd.ExecuteReader();
             if (reader.Read())
             {
-                return await ReadSessionWithRelations(reader);
+                return ReadSessionWithRelations(reader);
             }
             return null;
         }
@@ -322,12 +322,14 @@ public class SqliteSessionManager : ISessionManager, IDisposable
                 updateCmd.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O"));
                 updateCmd.ExecuteNonQuery();
             }
-
-            using var activityCmd = _connection.CreateCommand();
-            activityCmd.CommandText = "UPDATE Sessions SET LastActivityAt = $now WHERE Id = $sid";
-            activityCmd.Parameters.AddWithValue("$sid", sessionId);
-            activityCmd.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O"));
-            activityCmd.ExecuteNonQuery();
+            else
+            {
+                using var activityCmd = _connection.CreateCommand();
+                activityCmd.CommandText = "UPDATE Sessions SET LastActivityAt = $now WHERE Id = $sid";
+                activityCmd.Parameters.AddWithValue("$sid", sessionId);
+                activityCmd.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O"));
+                activityCmd.ExecuteNonQuery();
+            }
 
             _logger.LogInformation("Removed pending question {QuestionId} from session {SessionId}", questionId, sessionId);
         }
@@ -358,7 +360,7 @@ public class SqliteSessionManager : ISessionManager, IDisposable
         }
     }
 
-    private async Task<Session> ReadSessionWithRelations(SqliteDataReader reader)
+    private Session ReadSessionWithRelations(SqliteDataReader reader)
     {
         var sessionId = reader.GetString(reader.GetOrdinal("Id"));
         var session = new Session
