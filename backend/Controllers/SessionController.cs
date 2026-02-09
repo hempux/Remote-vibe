@@ -157,11 +157,11 @@ public class SessionController : ControllerBase
             // Remove the answered question
             await _sessionManager.RemovePendingQuestionAsync(id, request.QuestionId, ct);
 
-            // Store user's answer as a message
+            // Store user's answer as a message with the original question for context
             var userMessage = new ConversationMessage
             {
                 Type = MessageType.UserCommand,
-                Content = request.Response
+                Content = $"Q: {question.Question}\n\nA: {request.Response}"
             };
             await _sessionManager.AddMessageAsync(id, userMessage, ct);
             await BroadcastMessage(id, userMessage, ct);
