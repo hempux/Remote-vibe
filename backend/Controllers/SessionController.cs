@@ -157,11 +157,12 @@ public class SessionController : ControllerBase
             // Remove the answered question
             await _sessionManager.RemovePendingQuestionAsync(id, request.QuestionId, ct);
 
-            // Store user's answer as a message
+            // Store user's answer as a message, including the question text in metadata for display
             var userMessage = new ConversationMessage
             {
                 Type = MessageType.UserCommand,
-                Content = request.Response
+                Content = request.Response,
+                Metadata = System.Text.Json.JsonSerializer.Serialize(new { quotedQuestion = question.Question })
             };
             await _sessionManager.AddMessageAsync(id, userMessage, ct);
             await BroadcastMessage(id, userMessage, ct);
@@ -213,21 +214,31 @@ public class SessionController : ControllerBase
                 return NotFound("Session not found");
             }
 
-            var messages = session.History.Select(m => new
+            var messages = session.History.Select(m =>
             {
-                id = m.Id,
-                sessionId = id,
-                role = m.Type switch
+                System.Text.Json.JsonElement? parsedMetadata = null;
+                if (!string.IsNullOrEmpty(m.Metadata))
                 {
-                    MessageType.UserCommand => "User",
-                    MessageType.CopilotResponse => "Assistant",
-                    MessageType.SystemInfo => "System",
-                    MessageType.Error => "System",
-                    _ => "System"
-                },
-                content = m.Content,
-                timestamp = m.Timestamp,
-                metadata = (object?)null
+                    try { parsedMetadata = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(m.Metadata); }
+                    catch (System.Text.Json.JsonException) { /* ignore malformed metadata */ }
+                }
+
+                return new
+                {
+                    id = m.Id,
+                    sessionId = id,
+                    role = m.Type switch
+                    {
+                        MessageType.UserCommand => "User",
+                        MessageType.CopilotResponse => "Assistant",
+                        MessageType.SystemInfo => "System",
+                        MessageType.Error => "System",
+                        _ => "System"
+                    },
+                    content = m.Content,
+                    timestamp = m.Timestamp,
+                    metadata = parsedMetadata
+                };
             });
 
             return Ok(messages);
@@ -382,6 +393,13 @@ public class SessionController : ControllerBase
             _ => "System"
         };
 
+        System.Text.Json.JsonElement? parsedMetadata = null;
+        if (!string.IsNullOrEmpty(message.Metadata))
+        {
+            try { parsedMetadata = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(message.Metadata); }
+            catch (System.Text.Json.JsonException) { /* ignore malformed metadata */ }
+        }
+
         var payload = new
         {
             id = message.Id,
@@ -389,7 +407,7 @@ public class SessionController : ControllerBase
             role,
             content = message.Content,
             timestamp = message.Timestamp,
-            metadata = (object?)null
+            metadata = parsedMetadata
         };
 
         await _hubContext.Clients.Group(sessionId).SendAsync("OnMessageReceived", payload, ct);

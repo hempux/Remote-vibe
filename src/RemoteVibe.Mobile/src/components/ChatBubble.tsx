@@ -89,7 +89,16 @@ export default function ChatBubble({ message, index }: ChatBubbleProps) {
           </Text>
           <Text style={styles.timestamp}>{formatTime(message.timestamp)}</Text>
         </View>
-        <Text style={styles.content}>{message.content}</Text>
+        <Text style={styles.content}>
+          {message.metadata?.quotedQuestion ? (
+            <>
+              <Text style={styles.quotedQuestion}>{'> '}{message.metadata.quotedQuestion}{'\n'}</Text>
+              {message.content}
+            </>
+          ) : (
+            message.content
+          )}
+        </Text>
         {message.metadata?.filesChanged && (
           <View style={styles.filesContainer}>
             <Text style={styles.filesLabel}>Files changed:</Text>
@@ -177,6 +186,12 @@ const styles = StyleSheet.create({
   content: {
     ...typography.body,
     lineHeight: 20,
+  },
+  quotedQuestion: {
+    color: colors.textTertiary,
+    fontStyle: 'italic',
+    fontSize: 13,
+    lineHeight: 18,
   },
   filesContainer: {
     marginTop: spacing.sm,
