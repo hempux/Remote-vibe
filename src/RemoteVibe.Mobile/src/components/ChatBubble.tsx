@@ -33,6 +33,29 @@ export default function ChatBubble({ message, index }: ChatBubbleProps) {
   const isUser = message.role === 'User';
   const isSystem = message.role === 'System';
 
+  // Check if message is a Q&A format response
+  const isQAFormat = isUser && message.content.match(/^Q:\s*.+\n\nA:\s*/);
+  
+  // Parse Q&A content if applicable
+  const renderContent = () => {
+    if (isQAFormat) {
+      const parts = message.content.split('\n\nA: ');
+      if (parts.length === 2) {
+        const question = parts[0].replace(/^Q:\s*/, '');
+        const answer = parts[1];
+        return (
+          <>
+            <Text style={styles.questionLabel}>Answering:</Text>
+            <Text style={styles.questionText}>{question}</Text>
+            <View style={styles.answerDivider} />
+            <Text style={styles.content}>{answer}</Text>
+          </>
+        );
+      }
+    }
+    return <Text style={styles.content}>{message.content}</Text>;
+  };
+
   if (isSystem) {
     return (
       <Animated.View
@@ -89,7 +112,7 @@ export default function ChatBubble({ message, index }: ChatBubbleProps) {
           </Text>
           <Text style={styles.timestamp}>{formatTime(message.timestamp)}</Text>
         </View>
-        <Text style={styles.content}>{message.content}</Text>
+        {renderContent()}
         {message.metadata?.filesChanged && (
           <View style={styles.filesContainer}>
             <Text style={styles.filesLabel}>Files changed:</Text>
@@ -177,6 +200,28 @@ const styles = StyleSheet.create({
   content: {
     ...typography.body,
     lineHeight: 20,
+  },
+  questionLabel: {
+    ...typography.caption,
+    fontSize: 10,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  questionText: {
+    ...typography.body,
+    fontSize: 13,
+    lineHeight: 18,
+    fontStyle: 'italic',
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  answerDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    marginBottom: spacing.sm,
   },
   filesContainer: {
     marginTop: spacing.sm,
