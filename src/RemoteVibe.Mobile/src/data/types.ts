@@ -58,6 +58,7 @@ export type MessageRole = 'User' | 'Assistant' | 'System';
 export interface MessageMetadata {
   filesChanged?: string[];
   commandId?: string;
+  quotedQuestion?: string;
 }
 
 export interface ConversationMessage {
