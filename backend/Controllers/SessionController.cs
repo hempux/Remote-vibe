@@ -158,6 +158,8 @@ public class SessionController : ControllerBase
             await _sessionManager.RemovePendingQuestionAsync(id, request.QuestionId, ct);
 
             // Store user's answer as a message with the original question for context
+            // Format: "Q: {question}\n\nA: {answer}"
+            // Note: This format is parsed by the mobile app's ChatBubble component
             var userMessage = new ConversationMessage
             {
                 Type = MessageType.UserCommand,

@@ -34,18 +34,19 @@ export default function ChatBubble({ message, index }: ChatBubbleProps) {
   const isSystem = message.role === 'System';
 
   // Check if message is a Q&A format response
-  const isQAFormat = isUser && message.content.match(/^Q:\s*.+\n\nA:\s*/);
+  const isQAFormat = isUser && /^Q:\s*[\s\S]*\n\nA:\s/m.test(message.content);
   
   // Parse Q&A content if applicable
   const renderContent = () => {
     if (isQAFormat) {
-      const parts = message.content.split('\n\nA: ');
-      if (parts.length === 2) {
-        const question = parts[0].replace(/^Q:\s*/, '');
-        const answer = parts[1];
+      // Split only on the first occurrence of '\n\nA: '
+      const match = message.content.match(/^Q:\s*([\s\S]*?)\n\nA:\s([\s\S]*)$/m);
+      if (match) {
+        const question = match[1];
+        const answer = match[2];
         return (
           <>
-            <Text style={styles.questionLabel}>Answering:</Text>
+            <Text style={styles.questionLabel}>ANSWERING:</Text>
             <Text style={styles.questionText}>{question}</Text>
             <View style={styles.answerDivider} />
             <Text style={styles.content}>{answer}</Text>
