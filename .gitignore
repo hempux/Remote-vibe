@@ -9,6 +9,7 @@ obj/
 *.user
 *.suo
 *.DotSettings
+.nuget/
 
 # Expo / React Native
 .expo/
@@ -38,3 +39,9 @@ Thumbs.db
 
 # Docker
 docker-compose.override.yml
+
+# SQLite database files
+*.db
+*.db-wal
+*.db-shm
+data/

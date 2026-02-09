@@ -49,7 +49,10 @@ export default function SessionCard({ session, onPress, index }: SessionCardProp
     }).start();
   };
 
-  const repoName = session.repositoryPath?.split('/').pop() || session.sessionId;
+  const repoName = session.repositoryName || session.repositoryPath?.split('/').pop() || session.sessionId;
+  const repoDisplay = session.repositoryOwner
+    ? `${session.repositoryOwner}/${session.repositoryName}`
+    : session.repositoryPath ?? session.sessionId;
 
   const getBorderColors = (): [string, string] => {
     switch (session.status) {
@@ -97,8 +100,14 @@ export default function SessionCard({ session, onPress, index }: SessionCardProp
             </View>
 
             <Text style={styles.fullPath} numberOfLines={1}>
-              {session.repositoryPath ?? session.sessionId}
+              {repoDisplay}
             </Text>
+
+            {session.taskDescription && (
+              <Text style={styles.taskDescription} numberOfLines={2}>
+                {session.taskDescription}
+              </Text>
+            )}
 
             {session.currentCommand && (
               <View style={styles.commandRow}>
@@ -162,6 +171,12 @@ const styles = StyleSheet.create({
   fullPath: {
     ...typography.caption,
     fontFamily: 'monospace',
+    marginBottom: spacing.sm,
+  },
+  taskDescription: {
+    ...typography.body,
+    fontSize: 13,
+    color: colors.textSecondary,
     marginBottom: spacing.md,
   },
   commandRow: {

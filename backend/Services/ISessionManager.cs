@@ -4,7 +4,7 @@ namespace RemoteVibe.Backend.Services;
 
 public interface ISessionManager
 {
-    Task<Session> StartSessionAsync(string repositoryPath, CancellationToken ct = default);
+    Task<Session> StartSessionAsync(string repositoryOwner, string repositoryName, string? taskDescription = null, CancellationToken ct = default);
     Task<IEnumerable<Session>> GetAllSessionsAsync(CancellationToken ct = default);
     Task<Session?> GetCurrentSessionAsync(CancellationToken ct = default);
     Task<Session?> GetSessionAsync(string sessionId, CancellationToken ct = default);

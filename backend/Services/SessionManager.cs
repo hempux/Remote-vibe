@@ -13,20 +13,25 @@ public class SessionManager : ISessionManager
         _logger = logger;
     }
 
-    public async Task<Session> StartSessionAsync(string repositoryPath, CancellationToken ct = default)
+    public async Task<Session> StartSessionAsync(string repositoryOwner, string repositoryName, string? taskDescription = null, CancellationToken ct = default)
     {
         await _lock.WaitAsync(ct);
         try
         {
+            var repoPath = $"{repositoryOwner}/{repositoryName}";
             var session = new Session
             {
-                RepositoryPath = repositoryPath,
+                RepositoryOwner = repositoryOwner,
+                RepositoryName = repositoryName,
+                RepositoryPath = repoPath,
+                TaskDescription = taskDescription,
                 Status = SessionStatus.Idle,
                 StartedAt = DateTime.UtcNow
             };
 
             _sessions[session.Id] = session;
-            _logger.LogInformation("Started session {SessionId} for repository {RepositoryPath}", session.Id, repositoryPath);
+            _logger.LogInformation("Started session {SessionId} for repository {RepositoryOwner}/{RepositoryName}",
+                session.Id, repositoryOwner, repositoryName);
 
             return session;
         }

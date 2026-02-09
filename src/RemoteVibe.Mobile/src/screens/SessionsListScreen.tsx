@@ -5,10 +5,7 @@ import {
   View,
   FlatList,
   TextInput,
-  Modal,
   TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
   useWindowDimensions,
   ActivityIndicator,
   RefreshControl,
@@ -28,13 +25,10 @@ interface SessionsListScreenProps {
 
 export default function SessionsListScreen({ navigation }: SessionsListScreenProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [showNewSessionModal, setShowNewSessionModal] = useState(false);
-  const [newRepoPath, setNewRepoPath] = useState('');
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [starting, setStarting] = useState(false);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isTablet = width > 768;
@@ -79,7 +73,10 @@ export default function SessionsListScreen({ navigation }: SessionsListScreenPro
   const filteredSessions = searchQuery
     ? sessions.filter(
       (s) =>
+        (s.repositoryName?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
+        (s.repositoryOwner?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
         (s.repositoryPath?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
+        (s.taskDescription?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
         (s.currentCommand?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
     )
     : sessions;
@@ -91,19 +88,8 @@ export default function SessionsListScreen({ navigation }: SessionsListScreenPro
     [navigation]
   );
 
-  const handleNewSession = async () => {
-    if (!newRepoPath.trim() || starting) return;
-    setStarting(true);
-    try {
-      const newSession = await apiClient.startSession(newRepoPath.trim());
-      setSessions((prev) => [newSession, ...prev]);
-      setNewRepoPath('');
-      setShowNewSessionModal(false);
-    } catch (e: any) {
-      setError(e.message || 'Failed to start session');
-    } finally {
-      setStarting(false);
-    }
+  const handleNewSession = () => {
+    navigation.navigate('NewSession');
   };
 
   const renderSessionItem = useCallback(
@@ -218,91 +204,7 @@ export default function SessionsListScreen({ navigation }: SessionsListScreenPro
       )}
 
       {/* FAB */}
-      <GlowingFAB onPress={() => setShowNewSessionModal(true)} />
-
-      {/* New Session Modal */}
-      <Modal
-        visible={showNewSessionModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowNewSessionModal(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <TouchableOpacity
-            style={styles.modalBackdrop}
-            activeOpacity={1}
-            onPress={() => setShowNewSessionModal(false)}
-          />
-          <View style={[styles.modalContent, { paddingBottom: insets.bottom + spacing.xl }]}>
-            <LinearGradient
-              colors={[colors.neonPurple + '15', colors.electricBlue + '08']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>New Session</Text>
-            <Text style={styles.modalSubtitle}>
-              Enter the repository path to start an AI coding session
-            </Text>
-
-            <View style={styles.modalInputWrapper}>
-              <Text style={styles.modalInputLabel}>Repository Path</Text>
-              <TextInput
-                style={styles.modalInput}
-                value={newRepoPath}
-                onChangeText={setNewRepoPath}
-                placeholder="/path/to/your/project"
-                placeholderTextColor={colors.textTertiary}
-                autoFocus
-              />
-            </View>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => setShowNewSessionModal(false)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleNewSession}
-                activeOpacity={0.8}
-                disabled={!newRepoPath.trim() || starting}
-                style={{ flex: 1 }}
-              >
-                <LinearGradient
-                  colors={
-                    newRepoPath.trim() && !starting
-                      ? [colors.electricBlue, colors.neonPurple]
-                      : ['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.04)']
-                  }
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.startButton}
-                >
-                  {starting ? (
-                    <ActivityIndicator size="small" color={colors.textPrimary} />
-                  ) : (
-                    <Text
-                      style={[
-                        styles.startButtonText,
-                        !newRepoPath.trim() && { color: colors.textTertiary },
-                      ]}
-                    >
-                      Start Session
-                    </Text>
-                  )}
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      <GlowingFAB onPress={handleNewSession} />
     </View>
   );
 }
@@ -417,86 +319,5 @@ const styles = StyleSheet.create({
     color: colors.electricBlue,
     fontWeight: '600',
     fontSize: 14,
-  },
-
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  modalContent: {
-    backgroundColor: colors.backgroundLight,
-    borderTopLeftRadius: borderRadius.xxl,
-    borderTopRightRadius: borderRadius.xxl,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderBottomWidth: 0,
-    borderColor: colors.glassBorderLight,
-  },
-  modalHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignSelf: 'center',
-    marginBottom: spacing.xl,
-  },
-  modalTitle: {
-    ...typography.header,
-    fontSize: 24,
-    marginBottom: spacing.sm,
-  },
-  modalSubtitle: {
-    ...typography.body,
-    marginBottom: spacing.xl,
-  },
-  modalInputWrapper: {
-    marginBottom: spacing.xl,
-  },
-  modalInputLabel: {
-    ...typography.small,
-    marginBottom: spacing.sm,
-    color: colors.textSecondary,
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: colors.glassBorder,
-    borderRadius: borderRadius.md,
-    padding: spacing.lg,
-    color: colors.textPrimary,
-    fontSize: 16,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    fontFamily: 'monospace',
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  cancelButton: {
-    flex: 0.6,
-    paddingVertical: spacing.lg,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.glassBorder,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    ...typography.bodyBold,
-    color: colors.textSecondary,
-  },
-  startButton: {
-    paddingVertical: spacing.lg,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-  },
-  startButtonText: {
-    ...typography.bodyBold,
-    color: colors.textPrimary,
   },
 });

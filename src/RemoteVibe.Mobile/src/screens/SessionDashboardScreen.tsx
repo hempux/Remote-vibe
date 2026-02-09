@@ -169,7 +169,10 @@ export default function SessionDashboardScreen({
   }
 
   const statusColor = getStatusColor(session.status);
-  const repoName = session.repositoryPath?.split('/').pop() || session.sessionId;
+  const repoName = session.repositoryName || session.repositoryPath?.split('/').pop() || session.sessionId;
+  const repoDisplay = session.repositoryOwner
+    ? `${session.repositoryOwner}/${session.repositoryName}`
+    : session.repositoryPath ?? session.sessionId;
 
   const renderConversation = () => (
     <View style={styles.conversationContainer}>
@@ -260,7 +263,7 @@ export default function SessionDashboardScreen({
                 {repoName}
               </Text>
             </View>
-            <Text style={styles.bannerPath}>{session.repositoryPath ?? session.sessionId}</Text>
+            <Text style={styles.bannerPath}>{repoDisplay}</Text>
           </View>
           <StatusBadge status={session.status} size="medium" />
         </View>

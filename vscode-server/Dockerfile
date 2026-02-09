@@ -36,9 +36,12 @@ RUN chown -R coder:coder /home/coder/.local
 
 # Copy standalone server and install its dependencies locally
 COPY vscode-server/standalone-server.js /home/coder/standalone-server.js
-RUN cd /home/coder && npm init -y && npm install express
+RUN cd /home/coder && npm init -y && npm install express better-sqlite3
 RUN chown -R coder:coder /home/coder/standalone-server.js /home/coder/node_modules /home/coder/package.json /home/coder/package-lock.json
 RUN chmod +x /home/coder/standalone-server.js
+
+# Create data directory for SQLite database
+RUN mkdir -p /home/coder/data && chown coder:coder /home/coder/data
 
 # Switch back to coder user
 USER coder
