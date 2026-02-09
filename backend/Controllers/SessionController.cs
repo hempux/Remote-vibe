@@ -216,11 +216,11 @@ public class SessionController : ControllerBase
 
             var messages = session.History.Select(m =>
             {
-                object? parsedMetadata = null;
+                System.Text.Json.JsonElement? parsedMetadata = null;
                 if (!string.IsNullOrEmpty(m.Metadata))
                 {
-                    try { parsedMetadata = System.Text.Json.JsonSerializer.Deserialize<object>(m.Metadata); }
-                    catch { /* ignore malformed metadata */ }
+                    try { parsedMetadata = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(m.Metadata); }
+                    catch (System.Text.Json.JsonException) { /* ignore malformed metadata */ }
                 }
 
                 return new
@@ -393,11 +393,11 @@ public class SessionController : ControllerBase
             _ => "System"
         };
 
-        object? parsedMetadata = null;
+        System.Text.Json.JsonElement? parsedMetadata = null;
         if (!string.IsNullOrEmpty(message.Metadata))
         {
-            try { parsedMetadata = System.Text.Json.JsonSerializer.Deserialize<object>(message.Metadata); }
-            catch { /* ignore malformed metadata */ }
+            try { parsedMetadata = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(message.Metadata); }
+            catch (System.Text.Json.JsonException) { /* ignore malformed metadata */ }
         }
 
         var payload = new
